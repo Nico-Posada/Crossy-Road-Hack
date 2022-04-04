@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.IO;
 using static ModuleHelper.Helper;
+using System.Collections.Generic;
 
 namespace Memory
 {
@@ -37,12 +38,9 @@ namespace Memory
             IntPtr[] modulePointers = Array.Empty<IntPtr>();
             int bytesNeeded = 0;
             Process[] proc = Process.GetProcessesByName(processName);
-            if (proc.Length.Equals(0))
-            {
-                Console.WriteLine("Failed To Find Crossy Road's Process.");
-                Console.ReadKey();
-                return false;
-            }
+
+            if (proc.Length.Equals(0)) return false;
+
             Process p = proc[0];
             if (!Native.EnumProcessModulesEx(p.Handle, modulePointers, 0, out bytesNeeded, (uint)Native.ModuleFilter.ListModulesAll))
             {
@@ -67,7 +65,7 @@ namespace Memory
                     string moduleName = Path.GetFileName(moduleFilePath.ToString());
                     Native.ModuleInformation moduleInformation = new Native.ModuleInformation();
                     Native.GetModuleInformation(p.Handle, modulePointers[index], out moduleInformation, (uint)(IntPtr.Size * modulePointers.Length));
-                    if (moduleName == modToFindInProcess)
+                    if (String.Compare(moduleName, modToFindInProcess) == 0)
                     {
                         if (IsProcessRunning("Crossy Road"))
                         {
@@ -275,49 +273,60 @@ namespace Memory
             return addr >= BaseAddress && SizeOfImage + BaseAddress >= addr;
         }
 
-        public long PatternScan(long startAddress, long endAddress, byte[] sigInBytes, string[] sigInString, int skip)
+        public long[] FindBytes(byte?[] needle, long startAddress, long endAddress, bool firstMatch = false, int bufferSize = 0xFFFF)
         {
-            byte[] array = new byte[endAddress - startAddress];
-            long num = endAddress - startAddress;
-            if (num >= 3899391L) // This number might be off for 32bit games since doing big numbers fucks up the scans for some reason
+            List<long> results = new List<long>();
+            long searchAddress = startAddress;
+
+            int needleIndex = 0;
+            int bufferIndex = 0;
+
+            while (true)
             {
-                long num2 = 0L;
-                while (num2 < num)
+                try
                 {
-                    if (num - num2 > 3899391L)
+                    byte[] buffer = this.ReadBytes(searchAddress, bufferSize);
+
+                    for (bufferIndex = 0; bufferIndex < buffer.Length; bufferIndex++)
                     {
-                        byte[] array2 = this.ReadBytes(startAddress + num2, 3899391);
-                        array2.CopyTo(array, (int)num2);
-                        num2 += 3899391L;
-                    }
-                    else
-                    {
-                        long num3 = num - num2;
-                        byte[] array3 = this.ReadBytes(startAddress + num2, (int)num3);
-                        array3.CopyTo(array, (int)num3);
-                        num2 += 3899391L;
+                        if (needle[needleIndex] == null)
+                        {
+                            needleIndex++;
+                            continue;
+                        }
+
+                        if (needle[needleIndex] == buffer[bufferIndex])
+                        {
+                            needleIndex++;
+
+                            if (needleIndex == needle.Length)
+                            {
+                                results.Add(searchAddress + bufferIndex - needle.Length + 1);
+
+                                if (firstMatch)
+                                    return results.ToArray();
+
+                                needleIndex = 0;
+                            }
+                        }
+                        else
+                        {
+                            needleIndex = 0;
+                        }
                     }
                 }
-            }
-            else
-            {
-                array = this.ReadBytes(startAddress, (int)(endAddress - startAddress));
-            }
-            for (int i = 0; i < array.Length; i += skip)
-            {
-                int num4 = 0;
-                int num5 = i;
-                while (num5 < sigInBytes.Length + i && (array[num5] == sigInBytes[num4] || sigInString[num4] == "?"))
+                catch
                 {
-                    num4++;
-                    if (num4 == sigInBytes.Length)
-                    {
-                        return startAddress + i;
-                    }
-                    num5++;
+                    break;
                 }
+
+                searchAddress += bufferSize;
+
+                if (searchAddress > endAddress)
+                    break;
             }
-            return 0L;
+
+            return results.ToArray();
         }
 
         public void universalResolve(ref long offset, int addBeforeDeref, int addAfterDeref)
