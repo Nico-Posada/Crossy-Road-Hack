@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using System.Text;
 
 namespace ModuleHelper
 {
-    internal class Helper
+    public class Helper
     {
         public class Native
         {
@@ -16,7 +16,7 @@ namespace ModuleHelper
                 public IntPtr EntryPoint;
             }
 
-            internal enum ModuleFilter
+            public enum ModuleFilter
             {
                 ListModulesDefault = 0x0,
                 ListModules32Bit = 0x01,
