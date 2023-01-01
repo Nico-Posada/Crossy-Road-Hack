@@ -1,293 +1,160 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.IO;
 using static ModuleHelper.Helper;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Linq;
 
 namespace Memory
 {
     public class Mem
     {
-        public bool IsProcessRunning(string processName)
-        {
-            try
-            {
-                Process process = Process.GetProcessesByName(processName)[0];
-                if (process.Handle.ToInt64() != 0L)
-                {
-                    this.BaseAddress = process.MainModule.BaseAddress.ToInt64();
-                    this.ProcessID = process.Id;
-                    this.ProcessHandle = process.Handle;
-                    return true;
-                }
-            }
-            catch (Exception)
-            {
-                this.BaseAddress = 0L;
-                this.ProcessID = 0;
-                this.ProcessHandle = IntPtr.Zero;
-                return false;
-            }
-            return false;
-        }
-
-        public bool IsProcessWithModulesRunning(string processName, string modToFindInProcess)
-        {
-            IntPtr[] modulePointers = Array.Empty<IntPtr>();
-            int bytesNeeded = 0;
-            Process[] proc = Process.GetProcessesByName(processName);
-
-            if (proc.Length.Equals(0)) return false;
-
-            Process p = proc[0];
-            if (!Native.EnumProcessModulesEx(p.Handle, modulePointers, 0, out bytesNeeded, (uint)Native.ModuleFilter.ListModulesAll))
-            {
-                Console.WriteLine("Something Went Wrong, Try Restarting App.");
-                this.BaseAddress = 0L;
-                this.ProcessID = 0;
-                this.ProcessHandle = IntPtr.Zero;
-                this.SizeOfImage = 0U;
-                return false;
-            }
-
-            int totalNumberofModules = bytesNeeded / IntPtr.Size;
-            modulePointers = new IntPtr[totalNumberofModules];
-
-            if (Native.EnumProcessModulesEx(p.Handle, modulePointers, bytesNeeded, out bytesNeeded, (uint)Native.ModuleFilter.ListModulesAll))
-            {
-                for (int index = 0; index < totalNumberofModules; index++)
-                {
-                    StringBuilder moduleFilePath = new StringBuilder(1024);
-                    Native.GetModuleFileNameEx(p.Handle, modulePointers[index], moduleFilePath, (uint)(moduleFilePath.Capacity));
-
-                    string moduleName = Path.GetFileName(moduleFilePath.ToString());
-                    Native.ModuleInformation moduleInformation = new Native.ModuleInformation();
-                    Native.GetModuleInformation(p.Handle, modulePointers[index], out moduleInformation, (uint)(IntPtr.Size * modulePointers.Length));
-                    if (String.Compare(moduleName, modToFindInProcess) == 0)
-                    {
-                        if (IsProcessRunning("Crossy Road"))
-                        {
-                            this.BaseAddress = (long)moduleInformation.lpBaseOfDll;
-                            this.SizeOfImage = moduleInformation.SizeOfImage;
-                            return true;
-                        }
-                    }
-                }
-                return false;
-            }
-            else return false;
-        }
-
         [DllImport("kernel32.dll")]
         public static extern bool ReadProcessMemory(IntPtr hProcess, long lpBaseAddress, [Out] byte[] lpBuffer, uint nSize, out uint lpNumberOfBytesRead);
 
         [DllImport("kernel32.dll")]
         public static extern bool WriteProcessMemory(IntPtr hProcess, long lpBaseAddress, byte[] lpBuffer, uint nSize, out uint lpNumberOfBytesRead);
 
-        public void WriteInt(long pAddress, int value)
+        public bool IsProcessRunning(string processName)
         {
-            try
+            Process process = Process.GetProcessesByName(processName).FirstOrDefault();
+            if (process != default && process.Handle.ToInt64() != 0L)
             {
-                uint num = 0U;
-                Mem.WriteProcessMemory(this.ProcessHandle, pAddress, BitConverter.GetBytes(value), 4U, out num);
+                BaseAddress = process.MainModule.BaseAddress.ToInt64();
+                ProcessID = process.Id;
+                ProcessHandle = process.Handle;
+                return true;
             }
-            catch (Exception)
+            else
             {
-            }
-        }
-
-        public void WriteByte(long _lpBaseAddress, byte _Value)
-        {
-            byte[] bytes = BitConverter.GetBytes((short)_Value);
-            uint num = 0u;
-            Mem.WriteProcessMemory(this.ProcessHandle, _lpBaseAddress, bytes, (uint)(bytes.Length - 1), out num);
-        }
-
-        public void WriteUInt(long pAddress, uint value)
-        {
-            try
-            {
-                uint num = 0U;
-                Mem.WriteProcessMemory(this.ProcessHandle, pAddress, BitConverter.GetBytes(value), 4U, out num);
-            }
-            catch (Exception)
-            {
+                BaseAddress = 0L;
+                ProcessID = 0;
+                ProcessHandle = IntPtr.Zero;
+                return false;
             }
         }
 
-        public long GetPointerInt(long add, long[] offsets, int level)
+        public bool IsProcessRunning(string processName, string modToFindInProcess)
         {
-            long num = add;
-            for (int i = 0; i < level; i++)
+            IntPtr[] modulePointers = Array.Empty<IntPtr>();
+            Process proc = Process.GetProcessesByName(processName).FirstOrDefault();
+
+            if (proc == default || !Native.EnumProcessModulesEx(proc.Handle, modulePointers, 0, out int bytesNeeded, (uint)Native.ModuleFilter.ListModulesAll))
             {
-                num = this.ReadInt64(num) + offsets[i];
+                Console.WriteLine("Something Went Wrong, Try Restarting App.");
+                BaseAddress = 0L;
+                ProcessID = 0;
+                ProcessHandle = IntPtr.Zero;
+                SizeOfImage = 0U;
+                return false;
             }
-            return num;
-        }
 
-        public void WriteBytes(long _lpBaseAddress, byte[] _Value)
-        {
-            for (int i = 0; i < _Value.Length; i++)
+            int totalNumberofModules = bytesNeeded / IntPtr.Size;
+            modulePointers = new IntPtr[totalNumberofModules];
+
+            if (Native.EnumProcessModulesEx(proc.Handle, modulePointers, bytesNeeded, out _, (uint)Native.ModuleFilter.ListModulesAll))
             {
-                byte[] bytes = BitConverter.GetBytes((short)_Value[i]);
-                uint num = 0u;
-                Mem.WriteProcessMemory(this.ProcessHandle, _lpBaseAddress, bytes, (uint)(bytes.Length - 1), out num);
-            }
-        }
-
-        public void WriteXBytes(long _lpBaseAddress, byte[] _Value)
-        {
-            uint zero = 0u;
-            Mem.WriteProcessMemory(this.ProcessHandle, _lpBaseAddress, _Value, (uint)_Value.Length, out zero);
-        }
-
-        public long ReadInt64(long pAddress)
-        {
-            try
-            {
-                uint num = 0U;
-                byte[] array = new byte[8];
-                if (Mem.ReadProcessMemory(this.ProcessHandle, pAddress, array, 8U, out num))
+                for (int index = 0; index < totalNumberofModules; index++)
                 {
-                    return BitConverter.ToInt64(array, 0);
-                }
-            }
-            catch (Exception)
-            {
-            }
-            return 0L;
-        }
+                    StringBuilder moduleFilePath = new StringBuilder(1024);
+                    Native.GetModuleFileNameEx(proc.Handle, modulePointers[index], moduleFilePath, (uint)moduleFilePath.Capacity);
 
-        public string ReadString(long pAddress)
-        {
-            try
-            {
-                byte[] array = new byte[1280];
-                uint num = 0U;
-                if (Mem.ReadProcessMemory(this.ProcessHandle, pAddress, array, 1280U, out num))
-                {
-                    string text = "";
-                    int num2 = 0;
-                    while (array[num2] != 0)
+                    string moduleName = Path.GetFileName(moduleFilePath.ToString());
+                    Native.GetModuleInformation(proc.Handle, modulePointers[index], out Native.ModuleInformation moduleInformation, (uint)(IntPtr.Size * modulePointers.Length));
+                    if (moduleName == modToFindInProcess)
                     {
-                        string str = text;
-                        char c = (char)array[num2];
-                        text = str + c.ToString();
-                        num2++;
+                        if (IsProcessRunning("Crossy Road"))
+                        {
+                            BaseAddress = moduleInformation.lpBaseOfDll.ToInt64();
+                            SizeOfImage = moduleInformation.SizeOfImage;
+                            return true;
+                        }
                     }
-                    return text;
                 }
             }
-            catch (Exception)
-            {
-            }
-            return "";
+            return false;
         }
 
-        public int ReadInt(long pAddress)
+        public void WriteBytes(long address, byte[] bytes)
         {
-            try
-            {
-                uint num = 0U;
-                byte[] array = new byte[4];
-                if (Mem.ReadProcessMemory(this.ProcessHandle, pAddress, array, 4U, out num))
-                {
-                    return BitConverter.ToInt32(array, 0);
-                }
-            }
-            catch (Exception)
-            {
-            }
-            return 0;
-        }
-
-        public void WriteFloat(long pAddress, float value)
-        {
-            try
-            {
-                uint num = 0U;
-                Mem.WriteProcessMemory(this.ProcessHandle, pAddress, BitConverter.GetBytes(value), 4U, out num);
-            }
-            catch (Exception)
-            {
-            }
-        }
-
-        public float ReadFloat(long pAddress)
-        {
-            try
-            {
-                uint num = 0U;
-                byte[] array = new byte[4];
-                if (Mem.ReadProcessMemory(this.ProcessHandle, pAddress, array, 4U, out num))
-                {
-                    return BitConverter.ToSingle(array, 0);
-                }
-            }
-            catch (Exception)
-            {
-            }
-            return 0f;
+            if (!WriteProcessMemory(ProcessHandle, address, bytes, (uint)bytes.Length, out _))
+                throw new ArgumentException(new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()).Message);
         }
 
         public byte[] ReadBytes(long pAddress, int length)
         {
             byte[] array = new byte[length];
-            uint num = 0U;
-            Mem.ReadProcessMemory(this.ProcessHandle, pAddress, array, (uint)length, out num);
+            if (!ReadProcessMemory(ProcessHandle, pAddress, array, (uint)length, out _))
+                throw new ArgumentException(new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()).Message);
             return array;
         }
 
-        public void WriteBool(long pAddress, bool value)
+        /// <summary>
+        /// Read memory
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="address"></param>
+        /// <returns></returns>
+        public unsafe T Read<T>(long address)
         {
-            try
+            int size = Unsafe.SizeOf<T>();
+            var buffer = ReadBytes(address, size);
+            fixed (byte* b = buffer)
             {
-                byte[] buff = new byte[] { value ? ((byte)1) : ((byte)0) };
-                uint num = 0U;
-                Mem.WriteProcessMemory(this.ProcessHandle, pAddress, buff, (uint)buff.Length, out num);
-            }
-            catch (Exception)
-            {
+                return Unsafe.Read<T>(b);
             }
         }
 
-        public void WriteString(long pAddress, string pString)
+        /// <summary>
+        /// Write memory
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="address"></param>
+        /// <returns></returns>
+        public unsafe void Write<T>(long address, T value)
         {
-            try
+            int size = Unsafe.SizeOf<T>();
+            byte[] buffer = new byte[size];
+            fixed (byte* b = buffer)
             {
-                uint num = 0U;
-
-                if (Mem.WriteProcessMemory(this.ProcessHandle, pAddress, Encoding.UTF8.GetBytes(pString), (uint)pString.Length, out num))
-                {
-                    byte[] lpBuffer = new byte[1];
-                    Mem.WriteProcessMemory(this.ProcessHandle, pAddress + (long)pString.Length, lpBuffer, 1U, out num);
-                }
+                Unsafe.Write(b, value);
             }
-            catch (Exception) { }
+
+            WriteBytes(address, buffer);
         }
 
-        public bool IsValidAddr(long addr)
+        public string ReadString(long pAddress, int len = 512)
         {
-            return addr >= BaseAddress && SizeOfImage + BaseAddress >= addr;
+            byte[] buffer = ReadBytes(pAddress, len);
+            var sb = new StringBuilder();
+            for (int i = 0; buffer[i] != 0 && i < len; ++i)
+                sb.Append((char)buffer[i]);
+            return sb.ToString();
         }
 
-        public long[] FindBytes(byte?[] needle, long startAddress, long endAddress, bool firstMatch = false, int bufferSize = 0xFFFF)
+        public bool IsValidAddr(long addr) => addr >= BaseAddress && SizeOfImage + BaseAddress >= addr;
+
+        public long[] FindBytes(string sig, long startAddress, long endAddress, bool firstMatch = false, int bufferSize = 0xFFFF)
         {
-            List<long> results = new List<long>();
+            var results = new List<long>();
+            string[] array = sig.Split(' ');
+            byte?[] needle = new byte?[array.Length];
+            for (int i = 0; i < needle.Length; i++)
+                needle[i] = (array[i] == "?" || array[i] == "??") ? null : byte.Parse(array[i], System.Globalization.NumberStyles.HexNumber);
+
             long searchAddress = startAddress;
-
             int needleIndex = 0;
-            int bufferIndex = 0;
 
             while (true)
             {
                 try
                 {
-                    byte[] buffer = this.ReadBytes(searchAddress, bufferSize);
+                    byte[] buffer = ReadBytes(searchAddress, bufferSize);
 
-                    for (bufferIndex = 0; bufferIndex < buffer.Length; bufferIndex++)
+                    for (int bufferIndex = 0; bufferIndex < buffer.Length; bufferIndex++)
                     {
                         if (needle[needleIndex] == null)
                         {
@@ -327,14 +194,6 @@ namespace Memory
             }
 
             return results.ToArray();
-        }
-
-        public void universalResolve(ref long offset, int addBeforeDeref, int addAfterDeref)
-        {
-            long Base = offset + addBeforeDeref;
-            long readint = ReadInt(Base);
-            long final = Base + readint + addAfterDeref;
-            offset = final;
         }
 
         public long BaseAddress;
