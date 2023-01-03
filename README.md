@@ -1,4 +1,4 @@
-# Crossy-Road-Hack-Code-Cave
+# Crossy Road Hack
 
 **UPDATE**
 - Heavily cleaned up code and (hopefully) made it much more readable
