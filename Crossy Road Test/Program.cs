@@ -2,20 +2,22 @@ using Memory;
 using System;
 using System.Linq;
 using System.Threading;
+using ExtensionMethods;
 
 namespace Crossy_Road_Test
 {
     public class Program
     {
-        static readonly Mem m = new Mem();
+        static readonly Mem m = new();
 
         private struct Offsets
         {
-            public static long score_function    { get; set; }
-            public static long user_info         { get; set; }
+            public static long score_function { get; set; }
+            public static long user_info      { get; set; }
 
             public const int instruction_offset  = 0x06;
             public const int coin_offset         = 0xC4;
+            public const int high_score_offset   = 0x04;
         }
 
         private static bool Init()
@@ -34,7 +36,7 @@ namespace Crossy_Road_Test
 
             // set struct values
             Offsets.score_function = score_func_scan + Offsets.instruction_offset;
-            Offsets.user_info = m.Read<int>(user_info_scan + 1); // resolving mov instruction (x86 so you just read the 4 bytes after the instruction)
+            Offsets.user_info = m.Read<int>(user_info_scan + 1); // resolving mov instruction
 
             // make sure those modified values make sense (should almost always be fine)
             bool result = m.IsValidAddr(Offsets.score_function) && m.IsValidAddr(Offsets.user_info);
@@ -68,11 +70,10 @@ namespace Crossy_Road_Test
             while (true)
             {
                 Console.Clear();
-                Console.Write("Crossy Road Console Menu:\n[1] Max Score Hack\n[2] Set Coin Count\n\nInput: ");
+                Console.Write("Crossy Road Console Menu:\n[1] Max Score Hack\n[2] Set Coin Count\n[3] Set High Score\n\nInput: ");
                 string read = Console.ReadLine();
-                
-                // Make sure input is valid (is it a 1 or a 2)
-                if (!int.TryParse(read, out int input) || 0 >= input || input >= 3)
+
+                if (!int.TryParse(read, out int input) || 0 >= input || input > 3)
                     continue;
 
                 switch (input)
@@ -86,16 +87,14 @@ namespace Crossy_Road_Test
                         Console.ForegroundColor = ConsoleColor.White;
                         Console.WriteLine("\nPress any key to toggle hack...");
                         Console.ReadKey();
-                        
-                        // write modified bytes
+
                         if (!active) m.WriteBytes(Offsets.score_function, new byte[] { 0xB8, 0x0F, 0x27, 0x00, 0x00, 0x90, 0x90, 0x90 });
                         // ASSEMBLY
                         //  mov eax, 9999
                         //  nop
                         //  nop
                         //  nop
-                        
-                        // restore bytes
+
                         else m.WriteBytes(Offsets.score_function, new byte[] { 0x8B, 0x86, 0xA4, 0x00, 0x00, 0x00, 0x03, 0xC2 });
                         // ASSEMBLY
                         //  mov eax,[esi+000000A4]
@@ -114,18 +113,41 @@ namespace Crossy_Road_Test
 
                             if (!int.TryParse(coin_str, out int coins))
                                 continue;
-                            
-                            // get encrypted coin value, then write it to memory
-                            // (read user info offset because it's a pointer)
-                            
-                            int enc_coin_value = (coins + 0x4E876) ^ 0x4E876; // the reverse of the crappy encryption method crossy road uses
-                            m.Write(m.Read<int>(Offsets.user_info) + Offsets.coin_offset, enc_coin_value);
+
+                            m.Write(m.Read<int>(Offsets.user_info) + Offsets.coin_offset, coins.encrypt());
                             break;
                         }
 
                         Console.WriteLine("Successfully set coins!");
                         Thread.Sleep(4000);
 
+                        break;
+                    case 3:
+                        // read pointers
+                        int user = m.Read<int>(Offsets.user_info);
+                        int pSomething = m.Read<int>(user + 0xAC);
+                        int pIDK = m.Read<int>(pSomething + 0x08);
+                        int result = m.Read<int>(pIDK + 0x14);
+
+                        // (This whole ordeal was reversed using IDA, I wasn't able to decompile functions like
+                        // you normally can with Unity games, so idk the official names of these structs, all I know
+                        // is that it works)
+
+                        while (true)
+                        {
+                            Console.Clear();
+                            Console.Write("Set High Score\nInput: ");
+                            string high_score_str = Console.ReadLine();
+
+                            if (!int.TryParse(high_score_str, out int score))
+                                continue;
+
+                            m.Write(result + Offsets.high_score_offset, score.encrypt());
+                            break;
+                        }
+
+                        Console.WriteLine("Successfully set high score!");
+                        Thread.Sleep(4000);
                         break;
                     default:
                         break;
