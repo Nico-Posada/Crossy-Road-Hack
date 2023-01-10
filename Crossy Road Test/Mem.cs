@@ -26,6 +26,7 @@ namespace Memory
                 BaseAddress = process.MainModule.BaseAddress.ToInt64();
                 ProcessID = process.Id;
                 ProcessHandle = process.Handle;
+                SizeOfImage = (uint)process.WorkingSet64;
                 return true;
             }
             else
@@ -33,16 +34,16 @@ namespace Memory
                 BaseAddress = 0L;
                 ProcessID = 0;
                 ProcessHandle = IntPtr.Zero;
+                SizeOfImage = 0U;
                 return false;
             }
         }
 
         public bool IsProcessRunning(string processName, string modToFindInProcess)
         {
-            IntPtr[] modulePointers = Array.Empty<IntPtr>();
             Process proc = Process.GetProcessesByName(processName).FirstOrDefault();
 
-            if (proc == default || !Native.EnumProcessModulesEx(proc.Handle, modulePointers, 0, out int bytesNeeded, (uint)Native.ModuleFilter.ListModulesAll))
+            if (proc == default || !Native.EnumProcessModulesEx(proc.Handle, null, 0, out int bytesNeeded, (uint)Native.ModuleFilter.ListModulesAll))
             {
                 Console.WriteLine("Something Went Wrong, Try Restarting App.");
                 BaseAddress = 0L;
@@ -53,17 +54,17 @@ namespace Memory
             }
 
             int totalNumberofModules = bytesNeeded / IntPtr.Size;
-            modulePointers = new IntPtr[totalNumberofModules];
+            var modulePointers = new IntPtr[totalNumberofModules];
 
             if (Native.EnumProcessModulesEx(proc.Handle, modulePointers, bytesNeeded, out _, (uint)Native.ModuleFilter.ListModulesAll))
             {
-                for (int index = 0; index < totalNumberofModules; index++)
+                foreach(var ptr in modulePointers)
                 {
                     StringBuilder moduleFilePath = new StringBuilder(1024);
-                    Native.GetModuleFileNameEx(proc.Handle, modulePointers[index], moduleFilePath, (uint)moduleFilePath.Capacity);
+                    Native.GetModuleFileNameEx(proc.Handle, ptr, moduleFilePath, (uint)moduleFilePath.Capacity);
 
                     string moduleName = Path.GetFileName(moduleFilePath.ToString());
-                    Native.GetModuleInformation(proc.Handle, modulePointers[index], out Native.ModuleInformation moduleInformation, (uint)(IntPtr.Size * modulePointers.Length));
+                    Native.GetModuleInformation(proc.Handle, ptr, out Native.ModuleInformation moduleInformation, (uint)(IntPtr.Size * modulePointers.Length));
                     if (moduleName == modToFindInProcess)
                     {
                         if (IsProcessRunning("Crossy Road"))
