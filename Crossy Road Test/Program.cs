@@ -123,26 +123,98 @@ namespace Crossy_Road_Test
 
                         break;
                     case 3:
-                        // read pointers
-                        int user = m.Read<int>(Offsets.user_info);
-                        int pSomething = m.Read<int>(user + 0xAC);
-                        int pIDK = m.Read<int>(pSomething + 0x08);
-                        int result = m.Read<int>(pIDK + 0x14);
+                        // Initialize registry values
+                        int eax, ebx, ecx, edx, esi, edi, r8;
 
-                        // (This whole ordeal was reversed using IDA, I wasn't able to decompile functions like
-                        // you normally can with Unity games, so idk the official names of these structs, all I know
-                        // is that it works)
+                        // r8 isnt actually the registry used here, but it overlaps with another registry so idc
+                        r8 = m.Read<int>(Offsets.user_info);
+                        r8 = m.Read<int>(r8 + 0xAC);
+
+                        // recreating the decryption in a SharedLibrary.dll function that gets a ptr value that helps get the gamemode
+                        #region SharedLibrary.dll+33AE70 func recreation
+
+                        // ecx is the parameter passed to the function, a little debugging and you can figure out its just this
+                        ecx = m.Read<int>(m.Read<int>(m.BaseAddress + 0xAAFF88) + 0x154);
+
+                        edx = ecx;
+                        if (edx != 0)
+                            edx += 8;
+                        eax = 0x15051505;
+                        esi = eax;
+                        edi = m.Read<int>(ecx + 4);
+
+                        while (edi > 0)
+                        {
+                            ecx = eax;
+                            ecx <<= 5;
+                            ecx += eax;
+                            eax >>= 0x1B;
+                            eax += ecx;
+                            eax ^= m.Read<int>(edx);
+                            if (edi <= 2) break;
+                            ecx = esi;
+                            ecx <<= 5;
+                            ecx += esi;
+                            esi >>= 0x1B;
+                            esi += ecx;
+                            esi ^= m.Read<int>(edx + 4);
+                            edx += 8;
+                            edi -= 4;
+                        }
+
+                        ecx = esi * 0x5D588B65;
+                        eax += ecx;
+                        // EAX IS THE FINAL RESULT
+                        #endregion
+
+                        ebx = eax & 0x7FFFFFFF;
+                        esi = m.Read<int>(r8 + 4);
+                        ecx = m.Read<int>(esi + 4);
+                        eax = ebx;
+                        edx = eax % ecx;
+                        esi = m.Read<int>(esi + edx * 4 + 8);
+
+                        while (true)
+                        {
+                            edx = m.Read<int>(r8 + 8);
+                            eax = esi;
+                            eax += eax;
+                            if (m.Read<int>(edx + eax * 8 + 8) == ebx) break;
+                            eax = m.Read<int>(r8 + 8);
+                            esi = m.Read<int>(eax + esi * 16 + 0xC);
+                        }
+
+                        eax = m.Read<int>(r8 + 8);
+                        eax = m.Read<int>(eax + esi * 16 + 0x14);
+                        // END DECRYPTION
+
+                        string mode = "";
+                        switch (esi) // gamemode index
+                        {
+                            case 0:
+                                mode = "Default";
+                                break;
+                            case 1:
+                                mode = "Psy";
+                                break;
+                            case 2:
+                                mode = "Pac-Man";
+                                break;
+                            default:
+                                mode = "Unknown";
+                                break;
+                        }
 
                         while (true)
                         {
                             Console.Clear();
-                            Console.Write("Set High Score\nInput: ");
+                            Console.Write($"Set High Score (Will Set Score For Mode You're Currently In)\nCurrent Mode: {mode}\nInput: ");
                             string high_score_str = Console.ReadLine();
 
                             if (!int.TryParse(high_score_str, out int score))
                                 continue;
 
-                            m.Write(result + Offsets.high_score_offset, score.encrypt());
+                            m.Write(eax + Offsets.high_score_offset, score.encrypt());
                             break;
                         }
 
