@@ -3,8 +3,9 @@
 **UPDATE**
 - Heavily cleaned up code and (hopefully) made it much more readable
 - Figured out how coins are encrypted in memory, so there's now a set coin option
+- Spent a hell of a lot of time figuring out how setting high scores work too, so now theres that too lol
 
-Quick external Crossy Road trainer I made that modifies the function used to add points to your score and forces it to add 9999 to your score every time you move up. Also includes a set coin function. Includes a memory driver that has signature scanning and a method to fetch the base address for games that get handled by dll's (ie. Crossy Road.exe is the main exe, but everything gets handled by Crossy Road.dll).
+External Crossy Road Hack that I put together that utilized different unique methods to get stuff done. Can be used to get instant max score immediately on jump, set coin value, and set high score for any mode in the game.
 
 # USAGE
 Compile in x86 Release mode, run it and make sure Crossy Road is open (:
