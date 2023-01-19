@@ -8,9 +8,9 @@ namespace Crossy_Road_Test
 {
     public class Program
     {
-        static readonly Mem m = new();
+        public static readonly Mem m = new();
 
-        private struct Offsets
+        public struct Offsets
         {
             public static long score_function { get; set; }
             public static long user_info      { get; set; }
@@ -67,13 +67,14 @@ namespace Crossy_Road_Test
             if (!Init())
                 return;
 
+            
             while (true)
             {
                 Console.Clear();
-                Console.Write("Crossy Road Console Menu:\n[1] Max Score Hack\n[2] Set Coin Count\n[3] Set High Score\n\nInput: ");
+                Console.Write("Crossy Road Console Menu:\n[1] Max Score Hack\n[2] Set Coin Count\n[3] Set High Score\n[4] Unlock All\n\nInput: ");
                 string read = Console.ReadLine();
 
-                if (!int.TryParse(read, out int input) || 0 >= input || input > 3)
+                if (!int.TryParse(read, out int input) || 0 >= input || input > 4)
                     continue;
 
                 switch (input)
@@ -123,10 +124,9 @@ namespace Crossy_Road_Test
 
                         break;
                     case 3:
-                        // Initialize registry values
                         int eax, ebx, ecx, edx, esi, edi, r8;
 
-                        // r8 isnt actually the registry used here, but it overlaps with another registry so idc
+                        // r8 isnt actually the register used here, but it overlaps with another registry so idc
                         r8 = m.Read<int>(Offsets.user_info);
                         r8 = m.Read<int>(r8 + 0xAC);
 
@@ -178,17 +178,15 @@ namespace Crossy_Road_Test
                         {
                             edx = m.Read<int>(r8 + 8);
                             eax = esi;
-                            eax += eax;
-                            if (m.Read<int>(edx + eax * 8 + 8) == ebx) break;
+                            if (m.Read<int>(edx + eax * 16 + 8) == ebx) break;
                             eax = m.Read<int>(r8 + 8);
                             esi = m.Read<int>(eax + esi * 16 + 0xC);
                         }
 
                         eax = m.Read<int>(r8 + 8);
                         eax = m.Read<int>(eax + esi * 16 + 0x14);
-                        // END DECRYPTION
 
-                        string mode = "";
+                        string mode;
                         switch (esi) // gamemode index
                         {
                             case 0:
@@ -219,6 +217,55 @@ namespace Crossy_Road_Test
                         }
 
                         Console.WriteLine("Successfully set high score!");
+                        Thread.Sleep(4000);
+                        break;
+                    case 4:
+                        Console.Clear();
+
+                        ecx = (int)m.BaseAddress + 0x8EE0;
+
+                        eax = ecx;
+                        eax = m.Read<int>(eax + 0x20);
+                        eax = m.Read<int>(eax);
+                        eax = m.Read<int>(eax);
+                        esi = eax;
+                        if (m.Read<int>(esi) == 0)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("Failed to grab pointer!");
+                            Console.ForegroundColor = ConsoleColor.White;
+                            continue;
+                        }
+                        m.Write<byte>(esi, 1);
+                        eax = ecx;
+                        eax = m.Read<int>(eax + 0x20);
+                        eax = m.Read<int>(eax + 4);
+                        eax = m.Read<int>(eax);
+                        eax = m.Read<int>(eax);
+
+                        int ptr = eax;
+                        ptr = m.Read<int>(ptr + 0xC);
+                        int characterCount = m.Read<int>(ptr + 4);
+
+                        if (characterCount == 0)
+                        {
+                            Console.ForegroundColor = ConsoleColor.Red;
+                            Console.WriteLine("Character Count failed!");
+                            Console.ForegroundColor = ConsoleColor.White;
+                            continue;
+                        }
+
+                        int characterPtr = ptr + 8;
+                        int endPtr = ptr + 4 * characterCount + 8;
+                        
+                        while (characterPtr < endPtr)
+                        {
+                            int curCharacter = m.Read<int>(characterPtr);
+                            m.Write<byte>(curCharacter + 0xD5, 1);
+                            characterPtr += 4;
+                        }
+
+                        Console.WriteLine("Successfully Unlocked All Characters!");
                         Thread.Sleep(4000);
                         break;
                     default:
