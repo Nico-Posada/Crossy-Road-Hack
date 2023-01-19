@@ -77,8 +77,10 @@ namespace Crossy_Road_Test
                 if (!int.TryParse(read, out int input) || 0 >= input || input > 4)
                     continue;
 
+                int eax, ebx, ecx, edx, esi, edi, r8;
                 switch (input)
                 {
+
                     case 1:
                         bool active = IsActive(Offsets.score_function);
                         Console.Clear();
@@ -124,8 +126,6 @@ namespace Crossy_Road_Test
 
                         break;
                     case 3:
-                        int eax, ebx, ecx, edx, esi, edi, r8;
-
                         // r8 isnt actually the register used here, but it overlaps with another registry so idc
                         r8 = m.Read<int>(Offsets.user_info);
                         r8 = m.Read<int>(r8 + 0xAC);
