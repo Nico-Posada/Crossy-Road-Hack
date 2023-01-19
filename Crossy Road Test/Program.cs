@@ -18,6 +18,7 @@ namespace Crossy_Road_Test
             public const int instruction_offset  = 0x06;
             public const int coin_offset         = 0xC4;
             public const int high_score_offset   = 0x04;
+            public const int character_unlocked  = 0xD5;
         }
 
         private static bool Init()
@@ -261,7 +262,7 @@ namespace Crossy_Road_Test
                         while (characterPtr < endPtr)
                         {
                             int curCharacter = m.Read<int>(characterPtr);
-                            m.Write<byte>(curCharacter + 0xD5, 1);
+                            m.Write<byte>(curCharacter + Offsets.character_unlocked, 1);
                             characterPtr += 4;
                         }
 
